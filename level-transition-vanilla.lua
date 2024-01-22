@@ -1,7 +1,4 @@
 local SECTOR_SPECIAL_EXIT = 8192
-local SECTOR_SPECIAL_EGGCAPSULE = 144
-
-local LINEDEF_SPECIAL_EXIT = 462
 
 local THINGTYPE_SIGNPOST = 501
 local THINGTYPE_EGGMOBILE = 200
@@ -21,7 +18,8 @@ local momentumAngleDifference = 0
 local loadedOnce = false
 local iteratedOnce = false
 
-local exitNormal = true
+local levelNormal = true
+local prevLevelNormal = true
 
 local function calculateAbsoluteZ(mapthing)
     local subsector = R_PointInSubsector(mapthing.x * FRACUNIT, mapthing.y * FRACUNIT)
@@ -31,18 +29,6 @@ end
 local function mapthingFromThingType(type)
     for thing in mapthings.iterate do
         if thing.type == type then return thing end
-    end
-end
-
-local function getTagFromLinedefType(type) -- returns first instance of found type
-    for line in lines.iterate do
-        if line.tag ~= 0 then
-            -- print("line.tag: " .. line.tag)
-            print("line.special: " .. line.special)
-        end
-        if line.special == type then
-            return line.tag
-        end
     end
 end
 
@@ -72,7 +58,7 @@ local function initPlayerstate() -- Initializes the player.mo.momx/y/z
     player_old.cmd.sidemove = players[0].cmd.sidemove
 end
 
-local function initPlayerDefault()
+local function initPlayerDefault() -- inits playerstate to be default (vanilla behavior)
     player_default.state = players[0].state
     player_default.pflags = players[0].pflags
     player_default.cmd.buttons = players[0].cmd.buttons
@@ -83,8 +69,6 @@ end
 local function initSignpost() -- Initializes the z and angle of the singpost
     signpost = mapthingFromThingType(THINGTYPE_SIGNPOST)
     signpostZ = calculateAbsoluteZ(signpost)
-    print("thing angle: " .. signpost.angle)
-    print("thing angle * ANG1: " .. signpost.angle * ANG1)
     signpostAngle = signpost.angle * ANG1
 end
 
@@ -149,7 +133,7 @@ local function saveInput(player)
     player_old.cmd.sidemove = player.cmd.sidemove
 end
 
-local function loadInput()
+local function loadInput() -- this doesnt always work for some reason - TODO: FIX
     local player = players[0]
     player.cmd.buttons = player_old.cmd.buttons
     player.cmd.forwardmove = player_old.cmd.forwardmove
@@ -165,15 +149,13 @@ local function exitOverride(player)
         saveState(player)
         saveFlags(player)
         saveInput(player)
-        -- G_SetCustomExitVars(player.mo.subsector.sector.tag, 2) -- for future
         G_SetCustomExitVars(nil, 2)
         G_ExitLevel()
     end
 end
 
 local function exitOverrideBoss(player)
-    resetPlayerOld()
-    -- G_SetCustomExitVars(player.mo.subsector.sector.tag, 1) -- for future
+    -- resetPlayerOld()
     G_SetCustomExitVars(nil, 1)
 end
 
@@ -182,39 +164,47 @@ local function mobjDeathHandler(target, inflictor, source, damagetype)
 end
 
 local function playerThinkHandler(player)
-    if exitNormal == true then
+    if levelNormal == true then
         exitOverride(player)
-    else
+    end
+    if iteratedOnce == false and levelNormal == false then
         exitOverrideBoss(player)
+        iteratedOnce = true
+    end
+end
+
+local function bossLevelCheck()
+    for mapthing in mapthings.iterate do
+        if mapthing.type >= THINGTYPE_EGGMOBILE and mapthing.type <= THINGTYPE_FANG_WAYPOINT then
+            return true
+        end
     end
 end
 
 local function mapLoadHandler()
-    if loadedOnce == true and exitNormal == true then
-        -- loadRelativeCoords() -- only for non vanilla
-        loadRelativeMomentum()
-        applyViewAngle()
-        addZDistance()
-        loadState()
-        loadFlags()
-        loadInput()
-    else
-        initPlayerDefault()
-    end
-
-    exitNormal = true
-    for mapthing in mapthings.iterate do
-        if mapthing.type >= THINGTYPE_EGGMOBILE and mapthing.type <= THINGTYPE_FANG_WAYPOINT then
-            exitNormal = false
-        end
-    end
+    if bossLevelCheck() == true then -- is the current level a bass level?
+        levelNormal = false
+        prevLevelNormal = false
+    else levelNormal = true end
+    if loadedOnce == true then -- checks if any map has been loaded yes
+        if levelNormal == true then -- is the current level a normal (non boss) level?
+           if prevLevelNormal == true then -- was the previous level a normal level?
+                loadRelativeMomentum()
+                applyViewAngle()
+                addZDistance()
+                loadState()
+                loadFlags()
+                loadInput()
+           else initPlayerDefault() end
+           prevLevelNormal = true
+        else initPlayerDefault() end
+    else initPlayerDefault() end
 
     initPlayerstate()
-    if exitNormal == true then
-        initSignpost()
-    end
+    if levelNormal == true then initSignpost() end
 
     loadedOnce = true
+    iteratedOnce = false
 end
 
 addHook("MobjDeath", mobjDeathHandler, MT_PLAYER)

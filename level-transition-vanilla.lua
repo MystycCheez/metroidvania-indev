@@ -306,9 +306,7 @@ local function mapLoadHandler()
         prevLevelNormal = false
     else levelNormal = true end
     if loadedOnce == true then -- checks if any map has been loaded\
-        print("levelNormal = " .. tostring(levelNormal))
         if levelNormal == true then -- is the current level a normal (non boss) level?
-            print("prevLevelNormal = " .. tostring(prevLevelNormal))
            if prevLevelNormal == true then -- was the previous level a normal level?
                 loadLevelNormal()
            else loadLevelBoss() end

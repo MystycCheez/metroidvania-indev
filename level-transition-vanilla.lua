@@ -127,7 +127,6 @@ end
 
 local function loadRings()
     local player = players[0]
-    print("loadRings()")
     player.rings = player.rings + player_old.rings
 end
 

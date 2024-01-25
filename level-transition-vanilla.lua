@@ -6,6 +6,8 @@ local SECTOR_SPECIAL_EXIT = 8192
 local THINGTYPE_SIGNPOST = 501
 local THINGTYPE_EGGMOBILE = 200
 local THINGTYPE_FANG_WAYPOINT = 294
+local THINGTYPE_FLICKY_BLUEBIRD = 2200
+local THINGTYPE_FLICKY_BAT = 2217
 
 local player_old = {cmd = {}, mo = {}, powers = {}}
 local player_default = {cmd = {}, powers = {}}
@@ -22,6 +24,19 @@ local loadedOnce = false
 
 local levelNormal = true
 local prevLevelNormal = true
+
+---Copies table_a into table_b
+---
+---Does not copy sub tables
+---
+---Thanks to Flame (mars543 on Discord) for helping me with this function
+---@param table_a table
+---@param table_b table
+local function copyTable(table_a, table_b)
+    for i = 0, #table_a - 1 do
+        table_b[i] = table_a[i]
+    end
+end
 
 ---Returns mapthing.z * FRACUNIT + sector floorheight
 ---@param mapthing mapthing_t
@@ -55,16 +70,14 @@ local function resetPlayerOld()
     player_old.mo.momz = 0
     player_old.state = player_default.state
     player_old.pflags = player_default.pflags
-    zDistance = 0
-    momentumAngleDifference = 0
-    viewAngleDifference = 0
     player_old.cmd.buttons = player_default.cmd.buttons
     player_old.cmd.forwardmove = player_default.cmd.forwardmove
     player_old.cmd.sidemove = player_default.cmd.sidemove
     player_old.rings = player_default.rings
-    for i = 0, #players[0].powers - 1 do
-        player_old.powers[i] = player_default.powers[i]
-    end
+    copyTable(player_default.powers, player_old.powers)
+    zDistance = 0
+    momentumAngleDifference = 0
+    viewAngleDifference = 0
 end
 
 ---Initializes the player.mo.momx/y/z
@@ -78,6 +91,8 @@ local function initPlayerstate()
     player_old.cmd.buttons = players[0].cmd.buttons
     player_old.cmd.forwardmove = players[0].cmd.forwardmove
     player_old.cmd.sidemove = players[0].cmd.sidemove
+    player_old.rings = players[0].rings
+    copyTable(players[0].powers, player_old.powers)
 end
 
 ---Initializes playerstate to be default (vanilla behavior)
@@ -88,9 +103,7 @@ local function initPlayerDefault()
     player_default.cmd.forwardmove = players[0].cmd.forwardmove
     player_default.cmd.sidemove = players[0].cmd.sidemove
     player_default.rings = players[0].rings -- NOTE: handle boss rings
-    for i = 0, #players[0].powers - 1 do
-        player_default.powers[i] = players[0].powers[i]
-    end
+    copyTable(players[0].powers, player_default.powers)
 end
 
 ---Initializes the z and angle of the singpost
@@ -125,25 +138,25 @@ local function saveRings(player)
     player_old.rings = player.rings
 end
 
+---Sets ring count to what it was at the end of the previous level
+---
+---If current level is a boss level and player has less than 10 rigns, then set ring
+---count to 10 (aka do nothing). If the player has more than 10 rings, then set ring
+---count to that number no matter the level
 local function loadRings()
     local player = players[0]
-    player.rings = player.rings + player_old.rings
+    if levelNormal == true then player.rings = player_old.rings end
+    if levelNormal == false and player_old.rings > 10 then player.rings = player_old.rings end
 end
 
----Thanks to Flame (mars543 on Discord) for helping me with this function
 ---@param player player_t
 local function savePowers(player)
-    for i = 0, #player.powers - 1 do
-        player_old.powers[i] = player.powers[i]
-    end
+    copyTable(player.powers, player_old.powers)
 end
 
----Thanks to Flame (mars543 on Discord) for helping me with this function
 local function loadPowers()
     local player = players[0]
-    for i = 0, #player_old.powers - 1 do
-        player.powers[i] = player_old.powers[i]
-    end
+    copyTable(player_old.powers, player.powers)
     P_SpawnShieldOrb(player)
 end
 
@@ -209,7 +222,7 @@ local function loadInput()
     player.cmd.sidemove = player_old.cmd.sidemove
 end
 
----Saves all relevant data for transfering between levels,
+---Saves all relevant data for transfering between normal levels,
 ---sets custom exit params, then force exits the level
 ---@param player player_t
 local function exitOverrideNormal(player)
@@ -226,14 +239,13 @@ local function exitOverrideNormal(player)
     G_ExitLevel()
 end
 
----Sets custom exit params
----
----BUG: Doesn't work when going from boss level to normal level
+---Saves all relevant data for transfering between boss level and normal level.
+---Sets exit parameters
 ---@param player player_t
 local function exitOverrideBoss(player)
     saveRings(player)
     savePowers(player)
-    G_SetCustomExitVars(nil, 1)
+    G_SetCustomExitVars(nil, 2)
 end
 
 
@@ -264,18 +276,12 @@ local function mobjDeathHandler(target, inflictor, source, damagetype)
     resetPlayerOld()
 end
 
----Checks if the level is a normal stage or a boss stage then determines the exit action.
 ---If the level is normal, then it checks for if the player is on the exit sector or not.
 ---If the player is in the level sector, execute `exitOverrideNormal()`
----
----If the level is a boss stage, then it runs `exitOverrideBoss()` (only once)
 ---@param player player_t
 local function playerThinkHandler(player)
     if levelNormal == true and player.mo.subsector.sector.special == SECTOR_SPECIAL_EXIT then
         exitOverrideNormal(player)
-    end
-    if levelNormal ~= true then
-        exitOverrideBoss(player)
     end
 end
 
@@ -292,14 +298,18 @@ local function bossLevelCheck()
     return false
 end
 
+---Initializes default player data before anything else only once.
 ---Executes `bossLevelCheck()` to see if the current level is a boss level or a normal level.
 ---Checks if any level has been loaded yet. If not, then load default player data.
----If so, checks if the current level is a normal level. If not, then load default player data.
----Then it checks if the previous level was normal. If not, then load default player data.
+---If so, checks if the current level is a normal level. 
+---If not, then load previous player data vis `loadLevelBoss`.
+---Then it checks if the previous level was normal. 
+---If not, then load previous player data vis `loadLevelBoss`.
 ---If all of those conditions are met, apply/load data from the previous level into current.
 ---After all of that, initialize the playerstate for the next map to compare data again.
 ---Finally, if the level is a normal level, then initialize data for the signpost
 local function mapLoadHandler()
+    if loadedOnce == false then initPlayerDefault() end -- initialize default player data
     if bossLevelCheck() == true then -- is the current level a boss level?
         levelNormal = false
         prevLevelNormal = false
@@ -319,6 +329,16 @@ local function mapLoadHandler()
     loadedOnce = true
 end
 
+---@param mobj mobj_t
+local function mobjSpawnHandler(mobj)
+    if levelNormal == false then
+        if mobj.type >= MT_FLICKY_01 and mobj.type <= MT_SECRETFLICKY_02_CENTER then
+            exitOverrideBoss(players[0])
+        end
+    end
+end
+
 addHook("MobjDeath", mobjDeathHandler, MT_PLAYER)
 addHook("PlayerThink", playerThinkHandler)
 addHook("MapLoad", mapLoadHandler)
+addHook("MobjSpawn", mobjSpawnHandler, MT_NULL)

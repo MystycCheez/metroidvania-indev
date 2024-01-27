@@ -6,8 +6,6 @@ local SECTOR_SPECIAL_EXIT = 8192
 local THINGTYPE_SIGNPOST = 501
 local THINGTYPE_EGGMOBILE = 200
 local THINGTYPE_FANG_WAYPOINT = 294
-local THINGTYPE_FLICKY_BLUEBIRD = 2200
-local THINGTYPE_FLICKY_BAT = 2217
 
 local player_old = {cmd = {}, mo = {}, powers = {}}
 local player_default = {cmd = {}, powers = {}}

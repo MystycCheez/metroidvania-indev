@@ -300,9 +300,9 @@ end
 ---Executes `bossLevelCheck()` to see if the current level is a boss level or a normal level.
 ---Checks if any level has been loaded yet. If not, then load default player data.
 ---If so, checks if the current level is a normal level. 
----If not, then load previous player data vis `loadLevelBoss`.
+---If not, then load previous player data via `loadLevelBoss`.
 ---Then it checks if the previous level was normal. 
----If not, then load previous player data vis `loadLevelBoss`.
+---If not, then load previous player data via `loadLevelBoss`.
 ---If all of those conditions are met, apply/load data from the previous level into current.
 ---After all of that, initialize the playerstate for the next map to compare data again.
 ---Finally, if the level is a normal level, then initialize data for the signpost
